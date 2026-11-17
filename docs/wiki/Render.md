@@ -19,6 +19,8 @@ Pulsa **F12** (o el menú **Render → Render final…**).
 
 Cada render se añade a la **galería del Compositor** y se guarda con el proyecto. Puedes guardarlo como PNG con **Guardar PNG…**.
 
+**Añadir a lámina**: al terminar un render (y también al abrirlo desde la galería), elige una plantilla y pulsa **Añadir a lámina**. Se crea una lámina con ese render como pieza principal y se abre el Compositor. Si el render tiene fondo transparente se propone *Paquete de construcciones*; si no, *Exhibición*.
+
 También tienes **Render aislado (PNG transparente)** en *Objeto → Datos del archivo*: renderiza una sola construcción con fondo transparente.
 
 > El render es por rasterización (WebGL), no por trazado de rayos. El agua refleja el cielo, no las construcciones. La app avisa si el tamaño pedido supera lo que admite tu tarjeta gráfica.

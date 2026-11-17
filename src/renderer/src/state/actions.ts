@@ -126,7 +126,8 @@ export async function renderToGallery(opts: {
       source: opts.isolateId ? 'isolated' : 'scene',
       objectId: opts.isolateId,
       buildInfo: info,
-      samples: opts.samples
+      samples: opts.samples,
+      transparent: opts.transparent
     }
     st().addRender(item)
     st().toast({

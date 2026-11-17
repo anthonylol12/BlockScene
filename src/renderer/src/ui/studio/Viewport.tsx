@@ -78,7 +78,10 @@ export function Viewport(): JSX.Element {
               Arrastra aquí archivos <b>.schem</b>, <b>.schematic</b>, <b>.litematic</b>, <b>.nbt</b> o una región de mundo <b>.mca</b>, o usa el botón Importar. Cada archivo se analiza y se muestra como un objeto independiente.
             </p>
             <div className="row" style={{ justifyContent: 'center' }}>
-              <button className="btn primary" onClick={importBuildsAction}>
+              <button className="btn primary" onClick={() => useStore.getState().setModal({ type: 'wizard' })} title="Te guía para importar, elegir texturas, base, estilo y crear tu primera lámina (Ctrl+Mayús+N)">
+                <Icon name="star" /> Crear escena paso a paso
+              </button>
+              <button className="btn" onClick={importBuildsAction}>
                 <Icon name="import" /> Importar construcciones…
               </button>
               <button className="btn" onClick={loadDemoAction} title="Carga una casa GENERADA de ejemplo, marcada como tal">

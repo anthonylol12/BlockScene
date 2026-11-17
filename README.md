@@ -21,6 +21,18 @@ Aplicación de escritorio gratuita para crear **escenas 3D y láminas de present
 
 > **Cómo usarlo:** consulta la [wiki](https://github.com/anthonylol12/BlockScene/wiki) o descarga la guía en PDF (`BlockScene-Guia.pdf`) desde [Releases](https://github.com/anthonylol12/BlockScene/releases/latest). Las páginas de la wiki están en [`docs/wiki`](docs/wiki) y la guía se genera con `npx electron scripts/make-guide.cjs`.
 
+## Empezar
+
+Abre la app y pulsa **Crear escena paso a paso** (o **Ctrl+Mayús+N**). El asistente te guía por los pasos:
+
+1. importar la construcción, con una vista previa de sus datos;
+2. elegir texturas;
+3. crear una base ajustada a su tamaño;
+4. escoger un estilo, viendo qué cambia;
+5. renderizar.
+
+Al final se abre la lámina lista en el Compositor. Después de cualquier render, **Añadir a lámina** hace lo mismo con la plantilla que elijas.
+
 ## Requisitos
 
 - Windows 10/11 (también debería funcionar en macOS/Linux, pero no se ha probado).

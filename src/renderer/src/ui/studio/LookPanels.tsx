@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX } from 'react'
 import { useStore } from '../../state/store'
 import { BUILTIN_LOOKS, applyLook, currentAsLook, installedLooks, parseLook, saveUserLooks, type Look } from '../../state/looks'
+import { lookSummary } from '../../state/wizard'
 import { installPack, reloadWithPacks } from '../../state/textureActions'
 import { ColorInput, Field, Section, Seg, Slider, Toggle } from '../controls'
 import { Icon } from '../icons'
@@ -51,7 +52,8 @@ export function LooksSection(): JSX.Element {
     <Section title="Estilo visual (shaders)">
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         {all.map((l) => (
-          <div key={l.id} className="tpl-card" role="button" tabIndex={0} title={l.description} onClick={() => applyLook(l)} onKeyDown={(e) => e.key === 'Enter' && applyLook(l)} style={{ padding: 7, position: 'relative' }}>
+          <div key={l.id} className="tpl-card" role="button" tabIndex={0} title={`${l.description}
+Cambia: ${lookSummary(l).join(', ') || 'ajustes propios'}`} onClick={() => applyLook(l)} onKeyDown={(e) => e.key === 'Enter' && applyLook(l)} style={{ padding: 7, position: 'relative' }}>
             <b style={{ fontSize: 12 }}>{l.name}</b>
             <span className="hint" style={{ fontSize: 10.5 }}>{l.builtIn ? 'Incluido' : 'Instalado'}</span>
             {!l.builtIn && (

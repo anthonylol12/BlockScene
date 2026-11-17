@@ -29,6 +29,22 @@ export function applyTemplateToNew(id: TemplateId): void {
   st().setWorkspace('compositor')
 }
 
+/**
+ * «Añadir a lámina»: crea una lámina con la plantilla elegida usando este render como pieza principal
+ * y abre el Compositor. Las plantillas de una sola imagen usan solo este render.
+ */
+export function addRenderToSheet(renderId: string, template: TemplateId): boolean {
+  const all = st().project.renders
+  const r = all.find((x) => x.id === renderId)
+  if (!r) return false
+  const single = template === 'showcase' || template === 'sheet'
+  const renders = single ? [r] : [r, ...all.filter((x) => x.id !== renderId)]
+  const page = activeComposition(st())?.page ?? blankComposition().page
+  st().addComposition(buildTemplate(template, page, renders), true)
+  st().setWorkspace('compositor')
+  return true
+}
+
 export function applyCustomTemplate(t: Composition): void {
   st().addComposition(instantiateTemplate(t), true)
 }

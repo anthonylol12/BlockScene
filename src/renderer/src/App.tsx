@@ -49,7 +49,7 @@ function useShortcuts(): void {
       const k = e.key.toLowerCase()
       if (ctrl) {
         const map: Record<string, () => void> = {
-          n: newProjectAction,
+          n: () => (e.shiftKey ? s.setModal({ type: 'wizard' }) : newProjectAction()),
           o: openProjectAction,
           s: () => saveProjectAction(e.shiftKey),
           i: importBuildsAction,

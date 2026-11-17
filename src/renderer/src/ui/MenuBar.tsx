@@ -20,6 +20,7 @@ function useMenus(): Record<string, Item[]> {
   const comp = s.project.compositions.find((c) => c.id === s.project.activeCompositionId)
   return {
     Archivo: [
+      { label: 'Nueva escena paso a paso…', kbd: 'Ctrl+Mayús+N', run: () => s.setModal({ type: 'wizard' }) },
       { label: 'Nuevo proyecto', kbd: 'Ctrl+N', run: newProjectAction },
       { label: 'Abrir proyecto…', kbd: 'Ctrl+O', run: openProjectAction },
       { label: 'Guardar', kbd: 'Ctrl+S', run: () => saveProjectAction(false) },

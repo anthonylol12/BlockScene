@@ -8,6 +8,8 @@ import { renderCompositionBlob } from '../compositor/compActions'
 import { PAGE_PRESETS, QUALITY_INFO, checkCapacity } from '../compositor/pageFormats'
 import { BuildInfoView } from './studio/RightPanel'
 import { PrefsModal } from './PrefsModal'
+import { Wizard } from './Wizard'
+import { AddToSheet } from './AddToSheet'
 import { Field, Modal, NumInput, Seg, Select, Toggle, fmtBytes } from './controls'
 
 export function Modals(): JSX.Element | null {
@@ -23,6 +25,7 @@ export function Modals(): JSX.Element | null {
     case 'shortcuts': return <Shortcuts onClose={close} />
     case 'renderView': return <RenderView id={modal.renderId} onClose={close} />
     case 'prefs': return <PrefsModal onClose={close} />
+    case 'wizard': return <Wizard onClose={close} />
     default: return null
   }
 }
@@ -170,7 +173,7 @@ function RenderDialog({ onClose }: { onClose: () => void }): JSX.Element {
         <div className="callout ok" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span>Render generado: {r.width}×{r.height} px. Ya está en la galería.</span>
           <img className="preview-img" src={r.dataUrl} alt="Resultado del render" style={{ maxHeight: '36vh' }} />
-          <div className="row"><button className="btn small" onClick={() => downloadRender(r)}>Guardar PNG…</button></div>
+          <div className="row wrap"><button className="btn small" onClick={() => downloadRender(r)}>Guardar PNG…</button><span style={{ flex: 1 }} /><AddToSheet renderId={r.id} transparent={transparent} onDone={onClose} /></div>
         </div>
       )}
     </Modal>
@@ -315,7 +318,7 @@ function RenderView({ id, onClose }: { id: string; onClose: () => void }): JSX.E
   const r = useStore((s) => s.project.renders.find((x) => x.id === id))
   if (!r) return <Modal title="Render" onClose={onClose}>El render ya no existe.</Modal>
   return (
-    <Modal title={r.name} onClose={onClose} wide footer={<><button className="btn" onClick={() => downloadRender(r)}>Guardar PNG…</button><button className="btn primary" onClick={() => { useStore.getState().setWorkspace('compositor'); onClose() }}>Ir al Compositor</button></>}>
+    <Modal title={r.name} onClose={onClose} wide footer={<><button className="btn" onClick={() => downloadRender(r)}>Guardar PNG…</button><span className="grow" /><AddToSheet renderId={r.id} transparent={!!r.transparent || r.source === 'isolated'} onDone={onClose} /></>}>
       <img className="preview-img" src={r.dataUrl} alt={r.name} />
       <div className="kv"><span>Tamaño</span><span>{r.width}×{r.height} px</span><span>Muestras</span><span>{r.samples ?? '—'}</span><span>Creado</span><span>{new Date(r.createdAt).toLocaleString('es-ES')}</span></div>
     </Modal>
