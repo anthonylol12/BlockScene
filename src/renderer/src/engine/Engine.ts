@@ -410,8 +410,11 @@ export class Engine {
   static makeAtlasTexture(): THREE.CanvasTexture {
     const t = new THREE.CanvasTexture(atlas.get().canvas)
     t.magFilter = THREE.NearestFilter
-    t.minFilter = THREE.NearestFilter
-    t.generateMipmaps = false
+    // mipmaps: sin ellos, un bloque lejano (menos píxeles que texels) toma un texel al azar por píxel y el
+    // render sale granulado. Las teselas son potencias de 2 alineadas, así que los niveles hasta 1 texel por
+    // tesela no mezclan texturas vecinas; dentro de cada nivel se muestrea sin interpolar (aspecto pixelado).
+    t.minFilter = THREE.NearestMipmapLinearFilter
+    t.generateMipmaps = true
     t.colorSpace = THREE.SRGBColorSpace
     return t
   }
