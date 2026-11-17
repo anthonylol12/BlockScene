@@ -27,6 +27,7 @@ function useMenus(): Record<string, Item[]> {
       { label: 'Guardar como…', kbd: 'Ctrl+Mayús+S', run: () => saveProjectAction(true) },
       { sep: true, label: '' },
       { label: 'Importar construcciones…', kbd: 'Ctrl+I', run: importBuildsAction },
+      { label: 'Importar mundo de Minecraft…', kbd: 'Ctrl+Mayús+I', run: () => s.setModal({ type: 'world' }) },
       { label: 'Añadir imágenes a la galería…', run: importImagesToGallery },
       { label: 'Formatos compatibles', run: () => s.setModal({ type: 'formats' }) },
       { sep: true, label: '' },
@@ -73,6 +74,7 @@ function useMenus(): Record<string, Item[]> {
     Render: [
       { label: 'Render final…', kbd: 'F12', run: () => s.setModal({ type: 'render' }), disabled: !inStudio },
       { label: 'Render aislado de la construcción (PNG transparente)', run: renderSelectedIsolated, disabled: !inStudio },
+      { label: 'Exportar animación (vídeo o GIF)…', kbd: 'Ctrl+Mayús+F12', run: () => s.setModal({ type: 'animation' }), disabled: !inStudio },
       { sep: true, label: '' },
       { label: 'Calidad del visor: baja', run: () => s.setEnvSub('quality', { preset: 'low' }) },
       { label: 'Calidad del visor: media', run: () => s.setEnvSub('quality', { preset: 'medium' }) },

@@ -125,7 +125,7 @@ export function Wizard({ onClose }: { onClose: () => void }): JSX.Element {
     setBusy('Renderizando…')
     useStore.getState().select(null) // sin caja de selección ni gizmo en el render
     const opt = TEMPLATE_OPTIONS.find((t) => t.id === template)!
-    const r = await renderToGallery({ width: 1920, height: 1080, samples: +samples, cameraId: 'current', transparent: opt.transparent })
+    const r = await renderToGallery({ width: 1920, height: 1080, samples: +samples, scale: +samples >= 16 ? 2 : 1, cameraId: 'current', transparent: opt.transparent })
     setBusy(null)
     if (!r) {
       setError('El render no se completó. Revisa el aviso de error e inténtalo de nuevo.')

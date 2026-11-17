@@ -459,3 +459,76 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+// ---------------------------------------------------------------- mundos de Minecraft
+const savesDir = (): string => join(app.getPath('appData'), '.minecraft', 'saves')
+const isWorld = async (dir: string): Promise<boolean> => fs.stat(join(dir, 'level.dat')).then(() => true, () => false)
+
+/** Mundos de la carpeta saves de Minecraft, del más reciente al más antiguo. */
+ipcMain.handle('world:list', async () => {
+  const root = savesDir()
+  const names = await fs.readdir(root).catch(() => [] as string[])
+  const out: { path: string; folder: string; modified: number }[] = []
+  for (const n of names) {
+    const p = join(root, n)
+    try {
+      const st = await fs.stat(join(p, 'level.dat'))
+      out.push({ path: p, folder: n, modified: st.mtimeMs })
+    } catch { /* no es un mundo */ }
+  }
+  return out.sort((a, b) => b.modified - a.modified)
+})
+
+ipcMain.handle('world:pick', async () => {
+  if (!win) return null
+  const def = savesDir()
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Elige la carpeta del mundo (la que contiene level.dat)',
+    defaultPath: (await fs.stat(def).then(() => def, () => app.getPath('home'))),
+    properties: ['openDirectory']
+  })
+  if (r.canceled || !r.filePaths[0]) return null
+  let p = r.filePaths[0]
+  // si se eligió la carpeta "region" o un level.dat, subir a la carpeta del mundo
+  if (!(await isWorld(p)) && (await isWorld(join(p, '..')))) p = join(p, '..')
+  return (await isWorld(p)) ? p : { error: 'Esa carpeta no es un mundo de Minecraft: falta level.dat.' }
+})
+
+/** Carpetas de regiones de cada dimensión: formato clásico y el de 26.x (dimensions/minecraft/...). */
+const DIM_DIRS: Record<string, string[]> = {
+  overworld: ['dimensions/minecraft/overworld/region', 'region'],
+  nether: ['dimensions/minecraft/the_nether/region', 'DIM-1/region'],
+  end: ['dimensions/minecraft/the_end/region', 'DIM1/region']
+}
+const ALLOWED_DIM_DIRS = new Set(Object.values(DIM_DIRS).flat())
+
+/** level.dat y, por dimensión, la carpeta de regiones que existe y cuántos archivos tiene. */
+ipcMain.handle('world:info', async (_e, worldPath: string) => {
+  if (!(await isWorld(worldPath))) return { error: 'La carpeta no contiene level.dat' }
+  const level = await fs.readFile(join(worldPath, 'level.dat'))
+  const dims: Record<string, { dir: string; count: number }> = {}
+  for (const [k, dirs] of Object.entries(DIM_DIRS)) {
+    for (const d of dirs) {
+      const files = await fs.readdir(join(worldPath, ...d.split('/'))).catch(() => [] as string[])
+      const count = files.filter((f) => /^r\.-?\d+\.-?\d+\.mca$/.test(f)).length
+      if (count) { dims[k] = { dir: d, count }; break }
+    }
+  }
+  return { level: new Uint8Array(level.buffer, level.byteOffset, level.byteLength), dims, folder: basename(worldPath) }
+})
+
+/** Lee solo los archivos de región pedidos (nombres validados: r.X.Z.mca). */
+ipcMain.handle('world:readRegions', async (_e, args: { worldPath: string; dimDir: string; files: string[] }) => {
+  if (!ALLOWED_DIM_DIRS.has(args.dimDir)) return []
+  const out: { file: string; data: Uint8Array | null }[] = []
+  for (const f of args.files.slice(0, 64)) {
+    if (!/^r\.-?\d+\.-?\d+\.mca$/.test(f)) continue
+    try {
+      const b = await fs.readFile(join(args.worldPath, ...args.dimDir.split('/'), f))
+      out.push({ file: f, data: new Uint8Array(b.buffer, b.byteOffset, b.byteLength) })
+    } catch {
+      out.push({ file: f, data: null })
+    }
+  }
+  return out
+})

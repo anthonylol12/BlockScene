@@ -52,7 +52,7 @@ function useShortcuts(): void {
           n: () => (e.shiftKey ? s.setModal({ type: 'wizard' }) : newProjectAction()),
           o: openProjectAction,
           s: () => saveProjectAction(e.shiftKey),
-          i: importBuildsAction,
+          i: () => (e.shiftKey ? s.setModal({ type: 'world' }) : importBuildsAction()),
           k: saveCurrentView,
           e: () => activeComposition(s) && s.setModal({ type: 'export' }),
           '1': () => s.setWorkspace('studio'),
@@ -73,7 +73,7 @@ function useShortcuts(): void {
       }
       if (e.key === 'F12') {
         e.preventDefault()
-        if (s.workspace === 'studio') s.setModal({ type: 'render' })
+        if (s.workspace === 'studio') s.setModal({ type: e.ctrlKey && e.shiftKey ? 'animation' : 'render' })
         return
       }
       if (e.key === 'F1') {

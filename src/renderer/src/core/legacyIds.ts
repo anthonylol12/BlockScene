@@ -42,7 +42,27 @@ const BASE: Record<number, string> = {
   200: 'chorus_flower', 201: 'purpur_block', 202: 'purpur_pillar', 203: 'purpur_stairs', 204: 'purpur_slab', 205: 'purpur_slab',
   206: 'end_stone_bricks', 207: 'beetroots', 208: 'dirt_path', 209: 'end_gateway', 210: 'repeating_command_block',
   211: 'chain_command_block', 212: 'frosted_ice', 213: 'magma_block', 214: 'nether_wart_block', 215: 'red_nether_bricks',
-  216: 'bone_block', 217: 'structure_void', 218: 'observer', 255: 'structure_block'
+  216: 'bone_block', 217: 'structure_void', 218: 'observer', 255: 'structure_block',
+  34: 'piston_head', 36: 'air', 93: 'repeater', 94: 'repeater', 149: 'comparator', 150: 'comparator', 177: 'white_wall_banner',
+  253: 'air'
+}
+
+const STAIRS = new Set([53, 67, 108, 109, 114, 128, 134, 135, 136, 156, 163, 164, 180, 203])
+const DOORS = new Set([64, 71, 193, 194, 195, 196, 197])
+const AXIS = ['y', 'x', 'z'] as const
+/** orientación de los bloques con "facing" numérico 2-5 (cofres, hornos, escaleras de mano…) */
+const FACING_2_5: Record<number, string> = { 2: 'north', 3: 'south', 4: 'west', 5: 'east' }
+
+/** Propiedades de orientación del ID numérico, para que escaleras, troncos, puertas… no salgan todos iguales. */
+function legacyProps(id: number, d: number): string {
+  if (STAIRS.has(id)) return `[facing=${['east', 'west', 'south', 'north'][d & 3]},half=${d & 4 ? 'top' : 'bottom'}]`
+  if (DOORS.has(id)) return d & 8 ? '[half=upper]' : `[facing=${['east', 'south', 'west', 'north'][d & 3]},half=lower,open=${d & 4 ? 'true' : 'false'}]`
+  if (id === 96 || id === 167) return `[facing=${['south', 'north', 'east', 'west'][d & 3]},half=${d & 8 ? 'top' : 'bottom'},open=${d & 4 ? 'true' : 'false'}]`
+  if (id >= 183 && id <= 187 || id === 107) return `[facing=${['south', 'west', 'north', 'east'][d & 3]},open=${d & 4 ? 'true' : 'false'}]`
+  if (id === 170 || id === 216 || id === 202) return `[axis=${AXIS[(d >> 2) & 3] ?? 'y'}]`
+  if ([23, 54, 61, 62, 65, 130, 146, 158].includes(id) && FACING_2_5[d & 7]) return `[facing=${FACING_2_5[d & 7]}]`
+  if (id === 78) return `[layers=${(d & 7) + 1}]`
+  return ''
 }
 
 /** Devuelve el estado de bloque moderno ("minecraft:x[props]") o null si el ID no está en la tabla. */
@@ -54,8 +74,34 @@ export function legacyToModern(id: number, data: number): string | null {
     case 1: name = STONES[d] ?? 'stone'; break
     case 5: name = `${WOODS[d] ?? 'oak'}_planks`; break
     case 6: name = `${WOODS[d & 7] ?? 'oak'}_sapling`; break
-    case 17: name = `${WOODS[d & 3]}_log`; break
-    case 162: name = `${WOODS[4 + (d & 1)]}_log`; break
+    case 17:
+    case 162: {
+      // bits 2-3: eje del tronco (0 vertical, 1 este-oeste, 2 norte-sur, 3 solo corteza)
+      const wood = id === 17 ? WOODS[d & 3] : WOODS[4 + (d & 1)]
+      const ax = (d >> 2) & 3
+      name = ax === 3 ? `${wood}_wood` : `${wood}_log`
+      props = `[axis=${AXIS[ax === 3 ? 0 : ax]}]`
+      break
+    }
+    case 155: {
+      name = ['quartz_block', 'chiseled_quartz_block', 'quartz_pillar', 'quartz_pillar', 'quartz_pillar'][d] ?? 'quartz_block'
+      if (d >= 2 && d <= 4) props = `[axis=${['y', 'x', 'z'][d - 2]}]`
+      break
+    }
+    case 181: name = 'red_sandstone'; break
+    case 219: case 220: case 221: case 222: case 223: case 224: case 225: case 226:
+    case 227: case 228: case 229: case 230: case 231: case 232: case 233: case 234:
+      name = `${COLORS[id - 219]}_shulker_box`; break
+    case 235: case 236: case 237: case 238: case 239: case 240: case 241: case 242:
+    case 243: case 244: case 245: case 246: case 247: case 248: case 249: case 250:
+      name = `${COLORS[id - 235]}_glazed_terracotta`; break
+    case 50: case 75: case 76: {
+      const base = id === 50 ? 'torch' : 'redstone_torch'
+      const f = ({ 1: 'east', 2: 'west', 3: 'south', 4: 'north' } as Record<number, string>)[d & 7]
+      name = f ? base.replace('torch', 'wall_torch') : base
+      if (f) props = `[facing=${f}]`
+      break
+    }
     case 18: name = `${WOODS[d & 3]}_leaves`; break
     case 161: name = `${WOODS[4 + (d & 1)]}_leaves`; break
     case 35: name = `${COLORS[d]}_wool`; break
@@ -71,7 +117,6 @@ export function legacyToModern(id: number, data: number): string | null {
     case 126: name = `${WOODS[d & 7] ?? 'oak'}_slab`; props = d & 8 ? '[type=top]' : '[type=bottom]'; break
     case 98: name = ['stone_bricks', 'mossy_stone_bricks', 'cracked_stone_bricks', 'chiseled_stone_bricks'][d & 3]; break
     case 24: name = ['sandstone', 'chiseled_sandstone', 'cut_sandstone'][d % 3]; break
-    case 155: name = ['quartz_block', 'chiseled_quartz_block', 'quartz_pillar', 'quartz_pillar', 'quartz_pillar'][d] ?? 'quartz_block'; break
     case 168: name = ['prismarine', 'prismarine_bricks', 'dark_prismarine'][d % 3]; break
     case 12: name = d === 1 ? 'red_sand' : 'sand'; break
     case 3: name = ['dirt', 'coarse_dirt', 'podzol'][d % 3]; break
@@ -79,7 +124,9 @@ export function legacyToModern(id: number, data: number): string | null {
     case 31: name = d === 2 ? 'fern' : 'grass'; break
     case 175: name = ['sunflower', 'lilac', 'tall_grass', 'large_fern', 'rose_bush', 'peony'][d & 7] ?? 'tall_grass'; break
     case 139: name = d === 1 ? 'mossy_cobblestone_wall' : 'cobblestone_wall'; break
-    default: name = BASE[id]
+    default:
+      name = BASE[id]
+      props = legacyProps(id, d)
   }
   if (!name) return null
   return `minecraft:${name}${props}`

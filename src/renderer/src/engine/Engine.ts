@@ -39,6 +39,18 @@ export interface StillOptions {
   trim?: boolean
   onProgress?: (f: number, label: string) => void
   cancelled?: () => boolean
+  /** superresolución: se renderiza a N× el tamaño pedido y se reduce (más detalle en texturas y bordes) */
+  scale?: number
+}
+
+/** Ajustes de un fotograma de una secuencia (animación). */
+export interface FrameSpec {
+  /** giro de la cámara alrededor de su objetivo, en grados (eje vertical) */
+  orbitDeg?: number
+  /** hora del día de este fotograma (ciclo solar) */
+  timeOfDay?: number
+  /** tiempo en segundos para nubes, grano y shaders animados */
+  time?: number
 }
 
 function toGeometry(g: MeshGroup): THREE.BufferGeometry | null {
@@ -751,12 +763,8 @@ export class Engine {
       this.applyEnv(this.cycleTime)
     }
     this.controls.update()
-    // la luz sigue al centro de la escena para que el mapa de sombras cubra las construcciones
     const env = st.project.environment
-    const { dir, elevSin } = this.sunDirection(env, this.cycleTime ?? env.timeOfDay)
-    const lightDir = elevSin < 0 ? new THREE.Vector3(-dir.x, Math.max(0.35, -dir.y), -dir.z).normalize() : dir
-    this.sun.target.position.copy(this.sunAnchor)
-    this.sun.position.copy(this.sunAnchor).addScaledVector(lightDir, 200)
+    this.placeSun(this.cycleTime ?? env.timeOfDay)
     this.skyMat.uniforms.uTime.value = this.elapsed * env.clouds.speed * 10
     this.weather.update(this.elapsed, this.controls.target)
     for (const e of this.entries.values()) e.tick?.(this.elapsed)
@@ -778,6 +786,15 @@ export class Engine {
     }
   }
 
+  /** la luz sigue al centro de la escena para que el mapa de sombras cubra las construcciones */
+  private placeSun(t: number): void {
+    const env = useStore.getState().project.environment
+    const { dir, elevSin } = this.sunDirection(env, t)
+    const lightDir = elevSin < 0 ? new THREE.Vector3(-dir.x, Math.max(0.35, -dir.y), -dir.z).normalize() : dir
+    this.sun.target.position.copy(this.sunAnchor)
+    this.sun.position.copy(this.sunAnchor).addScaledVector(lightDir, 200)
+  }
+
   // ------------------------------------------------------------------ render final
   static gpuLimits(): { maxSize: number; maxViewport: [number, number] } {
     const c = document.createElement('canvas')
@@ -788,12 +805,44 @@ export class Engine {
     return r
   }
 
-  async renderStill(o: StillOptions): Promise<HTMLCanvasElement> {
-    const { width: W, height: H } = o
+  /** Tamaño máximo de render por lado que admite la GPU de este equipo. */
+  static maxRenderSide(): number {
     const lim = Engine.gpuLimits()
-    const maxSide = Math.min(lim.maxSize, lim.maxViewport[0], lim.maxViewport[1], 8192)
+    return Math.min(lim.maxSize, lim.maxViewport[0], lim.maxViewport[1], 8192)
+  }
+
+  /** Superresolución realmente aplicable a un tamaño (limitada por la GPU y la memoria). */
+  static effectiveScale(W: number, H: number, scale = 1): number {
+    const max = Engine.maxRenderSide()
+    let s = Math.max(1, Math.floor(scale))
+    while (s > 1 && (W * s > max || H * s > max || W * H * s * s > 40_000_000)) s--
+    return s
+  }
+
+  async renderStill(o: StillOptions): Promise<HTMLCanvasElement> {
+    let result: HTMLCanvasElement | null = null
+    await this.renderSequence(o, 1, () => ({}), (c) => { result = c })
+    const out = result as HTMLCanvasElement | null
+    if (!out) throw new Error('El render no produjo ninguna imagen.')
+    if (o.transparent && o.trim !== false) {
+      const d = out.getContext('2d')!.getImageData(0, 0, out.width, out.height).data
+      return trimTransparent(out, d, out.width, out.height)
+    }
+    return out
+  }
+
+  /**
+   * Renderiza `count` fotogramas con el mismo renderer (los shaders se compilan una vez).
+   * `spec(i)` indica el giro de cámara, la hora y el tiempo de cada fotograma; `onFrame` recibe el lienzo final
+   * (se reutiliza entre fotogramas: hay que consumirlo antes de devolver).
+   */
+  async renderSequence(o: StillOptions, count: number, spec: (i: number) => FrameSpec, onFrame: (c: HTMLCanvasElement, i: number) => void | Promise<void>): Promise<void> {
+    const { width: W, height: H } = o
+    const maxSide = Engine.maxRenderSide()
     if (W > maxSide || H > maxSide) throw new Error(`La GPU de este equipo admite como máximo ${maxSide} px por lado; se pidieron ${W}×${H}.`)
     if (W < 16 || H < 16) throw new Error('El tamaño mínimo de render es 16×16 px.')
+    const S = Engine.effectiveScale(W, H, o.scale)
+    const IW = W * S, IH = H * S
     const samples = Math.max(1, Math.min(64, Math.round(o.samples)))
     const env = useStore.getState().project.environment
     this.rendering = true
@@ -802,14 +851,17 @@ export class Engine {
     const prevFog = this.scene.fog
     const prevEnv = this.scene.environment
     const prevMap = this.sun.shadow.mapSize.x
+    const prevSky = this.skyMat.uniforms.uTime.value
+    let timeChanged = false
     let offPmrem: THREE.PMREMGenerator | null = null
     let offEnv: THREE.WebGLRenderTarget | null = null
+    let post: PostChain | null = null
     try {
       off.setPixelRatio(1)
-      off.setSize(W, H, false)
+      off.setSize(IW, IH, false)
       const gl = off.getContext()
-      if (gl.drawingBufferWidth !== W || gl.drawingBufferHeight !== H)
-        throw new Error(`La GPU no pudo reservar un lienzo de ${W}×${H} (obtuvo ${gl.drawingBufferWidth}×${gl.drawingBufferHeight}). Prueba con un tamaño menor.`)
+      if (gl.drawingBufferWidth !== IW || gl.drawingBufferHeight !== IH)
+        throw new Error(`La GPU no pudo reservar un lienzo de ${IW}×${IH} (obtuvo ${gl.drawingBufferWidth}×${gl.drawingBufferHeight}). Prueba con un tamaño menor.`)
       off.toneMapping = this.renderer.toneMapping
       off.toneMappingExposure = this.renderer.toneMappingExposure
       off.outputColorSpace = THREE.SRGBColorSpace
@@ -873,67 +925,103 @@ export class Engine {
         target.copy(this.controls.target)
         cam.zoom = this.camera.zoom
       }
-      cam.lookAt(target)
-      cam.updateProjectionMatrix()
-      cam.updateMatrixWorld()
+      const basePosCam = cam.position.clone()
 
       // misma cadena de postproceso que el visor (GTAO, bloom, gradación, viñeta, grano)
-      const post = createPost(off, this.scene, cam, W, H, env, 1, shaderStack.active(), () => this.atlasTex)
+      post = createPost(off, this.scene, cam, IW, IH, env, 1, shaderStack.active(), () => this.atlasTex)
       post.update(env, 17, shaderStack.active())
-      post.setTime(this.elapsed)
 
-      const acc = new Uint16Array(W * H * 4)
-      const buf = new Uint8Array(W * H * 4)
-      const basePos = this.sun.position.clone()
+      const acc = new Uint16Array(IW * IH * 4)
+      const buf = new Uint8Array(IW * IH * 4)
       const softR = env.shadowSoftness * 6
-      for (let i = 0; i < samples; i++) {
-        if (o.cancelled?.()) throw new Error('Render cancelado por el usuario.')
-        o.onProgress?.(i / samples, i === 0 ? 'Compilando shaders y calculando sombras' : `Muestra ${i + 1} de ${samples}`)
-        await new Promise((r) => setTimeout(r, 0))
-        // jitter subpíxel (antialiasing) y del sol (sombras suaves)
-        const jx = samples > 1 ? (halton(i + 1, 2) - 0.5) : 0
-        const jy = samples > 1 ? (halton(i + 1, 3) - 0.5) : 0
-        cam.setViewOffset(W, H, jx, jy, W, H)
-        if (samples > 1 && env.shadows) {
-          const a = halton(i + 1, 5) * Math.PI * 2, rr = Math.sqrt(halton(i + 1, 7)) * softR
-          this.sun.position.copy(basePos).add(new THREE.Vector3(Math.cos(a) * rr, 0, Math.sin(a) * rr))
-        }
-        post.composer.render()
-        gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf)
-        for (let k = 0; k < buf.length; k++) acc[k] += buf[k]
-      }
-      this.sun.position.copy(basePos)
-      o.onProgress?.(1, 'Componiendo imagen')
-      const out = document.createElement('canvas')
-      out.width = W
-      out.height = H
-      const ctx = out.getContext('2d')!
-      const img = ctx.createImageData(W, H)
+      const big = document.createElement('canvas')
+      big.width = IW
+      big.height = IH
+      const bctx = big.getContext('2d')!
+      const img = bctx.createImageData(IW, IH)
       const d = img.data
-      for (let y = 0; y < H; y++) {
-        const src = (H - 1 - y) * W * 4, dst = y * W * 4
-        for (let x = 0; x < W * 4; x += 4) {
-          const a = acc[src + x + 3] / samples
-          let r = acc[src + x] / samples, g = acc[src + x + 1] / samples, b = acc[src + x + 2] / samples
-          if (o.transparent && a > 0 && a < 255) {
-            const f = 255 / a
-            r *= f
-            g *= f
-            b *= f
-          }
-          d[dst + x] = r
-          d[dst + x + 1] = g
-          d[dst + x + 2] = b
-          d[dst + x + 3] = o.transparent ? a : 255
-        }
+      let out = big
+      if (S > 1) {
+        out = document.createElement('canvas')
+        out.width = W
+        out.height = H
       }
-      ctx.putImageData(img, 0, 0)
-      post.dispose()
-      return o.transparent && o.trim !== false ? trimTransparent(out, d, W, H) : out
+      const total = count * samples
+      for (let f = 0; f < count; f++) {
+        const fs = spec(f)
+        // giro de cámara y hora del día de este fotograma
+        cam.position.copy(basePosCam)
+        if (fs.orbitDeg) cam.position.sub(target).applyAxisAngle(new THREE.Vector3(0, 1, 0), fs.orbitDeg * DEG).add(target)
+        cam.lookAt(target)
+        cam.updateProjectionMatrix()
+        cam.updateMatrixWorld()
+        if (fs.timeOfDay != null) {
+          this.applyEnv(fs.timeOfDay)
+          this.placeSun(fs.timeOfDay)
+          timeChanged = true
+        }
+        const t = fs.time ?? this.elapsed
+        post.setTime(t)
+        this.skyMat.uniforms.uTime.value = t * env.clouds.speed * 10
+        acc.fill(0)
+        const basePos = this.sun.position.clone()
+        for (let i = 0; i < samples; i++) {
+          if (o.cancelled?.()) throw new Error('Render cancelado por el usuario.')
+          const done = f * samples + i
+          o.onProgress?.(done / total, count > 1 ? `Fotograma ${f + 1} de ${count}` : i === 0 ? 'Compilando shaders y calculando sombras' : `Muestra ${i + 1} de ${samples}`)
+          await new Promise((r) => setTimeout(r, 0))
+          // jitter subpíxel (antialiasing) y del sol (sombras suaves)
+          const jx = samples > 1 ? (halton(i + 1, 2) - 0.5) : 0
+          const jy = samples > 1 ? (halton(i + 1, 3) - 0.5) : 0
+          cam.setViewOffset(IW, IH, jx, jy, IW, IH)
+          if (samples > 1 && env.shadows) {
+            const a = halton(i + 1, 5) * Math.PI * 2, rr = Math.sqrt(halton(i + 1, 7)) * softR
+            this.sun.position.copy(basePos).add(new THREE.Vector3(Math.cos(a) * rr, 0, Math.sin(a) * rr))
+          }
+          post.composer.render()
+          gl.readPixels(0, 0, IW, IH, gl.RGBA, gl.UNSIGNED_BYTE, buf)
+          for (let k = 0; k < buf.length; k++) acc[k] += buf[k]
+        }
+        this.sun.position.copy(basePos)
+        if (count === 1) o.onProgress?.(1, 'Componiendo imagen')
+        for (let y = 0; y < IH; y++) {
+          const src = (IH - 1 - y) * IW * 4, dst = y * IW * 4
+          for (let x = 0; x < IW * 4; x += 4) {
+            const a = acc[src + x + 3] / samples
+            let r = acc[src + x] / samples, g = acc[src + x + 1] / samples, b = acc[src + x + 2] / samples
+            if (o.transparent && a > 0 && a < 255) {
+              const k = 255 / a
+              r *= k
+              g *= k
+              b *= k
+            }
+            d[dst + x] = r
+            d[dst + x + 1] = g
+            d[dst + x + 2] = b
+            d[dst + x + 3] = o.transparent ? a : 255
+          }
+        }
+        bctx.putImageData(img, 0, 0)
+        if (S > 1) {
+          // reducción de alta calidad al tamaño pedido
+          const octx = out.getContext('2d')!
+          octx.clearRect(0, 0, W, H)
+          octx.imageSmoothingEnabled = true
+          octx.imageSmoothingQuality = 'high'
+          octx.drawImage(big, 0, 0, W, H)
+        }
+        await onFrame(out, f)
+      }
     } finally {
+      post?.dispose()
       for (const h of hidden) h.visible = true
       this.scene.fog = prevFog
       this.scene.environment = prevEnv
+      this.skyMat.uniforms.uTime.value = prevSky
+      if (timeChanged) {
+        this.applyEnv()
+        this.placeSun(this.cycleTime ?? useStore.getState().project.environment.timeOfDay)
+      }
       offEnv?.dispose()
       offPmrem?.dispose()
       if (this.sun.shadow.mapSize.x !== prevMap) {

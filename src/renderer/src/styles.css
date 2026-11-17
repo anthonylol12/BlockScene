@@ -272,3 +272,7 @@ button.tpl-card { text-align: left; color: var(--text); font: inherit; }
 .tpl-card.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
 .wizard-pre { white-space: pre-wrap; margin: 0; font: 11.5px var(--font); user-select: text; }
 .wizard-embed .section { border: 1px solid var(--line); border-radius: 8px; }
+
+/* Importar mundo */
+.world-list { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow: auto; }
+.world-list .tpl-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }

@@ -36,6 +36,8 @@ export type ModalState =
   | { type: 'pageSetup' }
   | { type: 'prefs' }
   | { type: 'wizard' }
+  | { type: 'animation' }
+  | { type: 'world' }
 
 interface State {
   project: Project

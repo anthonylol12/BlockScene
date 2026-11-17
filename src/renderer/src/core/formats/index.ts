@@ -61,10 +61,15 @@ export function minecraftVersionFor(dv: number | null): string | null {
   return exact ? exact[1] : `≈ ${best}`
 }
 
-function stateString(c: NbtValue): string {
+/**
+ * Estado de bloque de una entrada de paleta. Formatos: {Name, Properties} (clásico) y, desde las
+ * snapshots 26.4, {id, properties} o {"": "minecraft:stone"} (bloque sin propiedades).
+ */
+export function stateString(c: NbtValue): string {
+  if (typeof c === 'string') return c
   if (!isCompound(c)) return 'minecraft:air'
-  const name = str(c.Name) ?? 'minecraft:air'
-  const props = c.Properties
+  const name = str(c.Name) ?? str(c.id) ?? str(c['']) ?? 'minecraft:air'
+  const props = c.Properties ?? c.properties
   if (!isCompound(props)) return name
   const keys = Object.keys(props).sort()
   if (!keys.length) return name
@@ -151,6 +156,32 @@ function parseSponge(root: NbtCompound, warnings: string[]): { model: VoxelModel
 }
 
 // ---------------------------------------------------------------- MCEdit .schematic
+/**
+ * En los IDs antiguos la mitad superior de una puerta no guarda su orientación (está en la inferior).
+ * Se copia "facing" y "open" de la mitad de abajo para que las dos mitades queden alineadas.
+ */
+export function inheritUpperDoors(W: number, L: number, data: Uint16Array, palette: string[]): void {
+  const upper = new Set<number>()
+  palette.forEach((s, i) => { if (/_door\[half=upper\]$/.test(s)) upper.add(i) })
+  if (!upper.size) return
+  const layer = W * L
+  const cache = new Map<string, number>()
+  for (let i = layer; i < data.length; i++) {
+    if (!upper.has(data[i])) continue
+    const below = palette[data[i - layer]]
+    const m = below?.match(/_door\[facing=(\w+),half=lower,open=(\w+)\]$/)
+    if (!m) continue
+    const s = palette[data[i]].replace('[half=upper]', `[facing=${m[1]},half=upper,open=${m[2]}]`)
+    let idx = cache.get(s)
+    if (idx === undefined) {
+      idx = palette.indexOf(s)
+      if (idx < 0) { idx = palette.length; palette.push(s) }
+      cache.set(s, idx)
+    }
+    data[i] = idx
+  }
+}
+
 function parseMcedit(root: NbtCompound, warnings: string[]): { model: VoxelModel; meta: Partial<ParseMeta> } {
   const W = (num(root.Width) ?? 0) & 0xffff
   const H = (num(root.Height) ?? 0) & 0xffff
@@ -186,6 +217,7 @@ function parseMcedit(root: NbtCompound, warnings: string[]): { model: VoxelModel
   }
   if (unknownIds.size)
     warnings.push(`IDs antiguos sin traducción (se dibujan en magenta): ${[...unknownIds].slice(0, 12).join(', ')}${unknownIds.size > 12 ? '…' : ''}`)
+  inheritUpperDoors(W, L, data, palette)
   return {
     model: { sx: W, sy: H, sz: L, data, palette },
     meta: { format: 'mcedit', formatLabel: 'MCEdit Schematic (pre-1.13)', version: materials ?? null, dataVersion: null }
@@ -312,15 +344,21 @@ function parseStructure(root: NbtCompound, warnings: string[]): { model: VoxelMo
 }
 
 // ---------------------------------------------------------------- Región .mca
-async function parseRegion(bytes: Uint8Array, warnings: string[], onProgress?: (f: number) => void): Promise<{ model: VoxelModel; meta: Partial<ParseMeta> }> {
+export interface RegionSection { x: number; y: number; z: number; pal: string[]; idx: Uint16Array | null }
+export interface RegionRead { sections: RegionSection[]; maxDataVersion: number | null; lz4: number; bad: number; legacy: number; chunks: number }
+
+/**
+ * Lee las secciones de bloques de un archivo de región Anvil. `chunkFilter(cx, cz)` permite leer solo
+ * algunos chunks (importación de un área de un mundo) y `yMin/yMax` descarta secciones fuera de ese rango.
+ */
+export async function readRegionSections(bytes: Uint8Array, opts: { chunkFilter?: (cx: number, cz: number) => boolean; yMin?: number; yMax?: number; onProgress?: (f: number) => void } = {}): Promise<RegionRead> {
   if (bytes.length < 8192) throw new FormatError('El archivo de región es demasiado pequeño (cabecera incompleta)')
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  type Sec = { x: number; y: number; z: number; pal: string[]; idx: Uint16Array | null }
-  const sections: Sec[] = []
+  const sections: RegionSection[] = []
   let maxDataVersion: number | null = null
   let lz4 = 0, bad = 0, legacy = 0, chunks = 0
   for (let i = 0; i < 1024; i++) {
-    if (onProgress && i % 32 === 0) onProgress(i / 1024 * 0.6)
+    if (opts.onProgress && i % 32 === 0) opts.onProgress(i / 1024)
     const loc = dv.getUint32(i * 4)
     const off = (loc >>> 8) * 4096
     if (!off) continue
@@ -338,18 +376,21 @@ async function parseRegion(bytes: Uint8Array, warnings: string[], onProgress?: (
     } catch { bad++; continue }
     let root: NbtCompound
     try { root = readNbtRaw(raw).root } catch { bad++; continue }
-    chunks++
-    const dvn = num(root.DataVersion)
-    if (dvn != null) maxDataVersion = Math.max(maxDataVersion ?? 0, dvn)
     const level = isCompound(root.Level) ? root.Level : root
     const cx = num(level.xPos) ?? num(root.xPos) ?? 0
     const cz = num(level.zPos) ?? num(root.zPos) ?? 0
+    if (opts.chunkFilter && !opts.chunkFilter(cx, cz)) continue
+    chunks++
+    const dvn = num(root.DataVersion)
+    if (dvn != null) maxDataVersion = Math.max(maxDataVersion ?? 0, dvn)
     const secs = (Array.isArray(root.sections) ? root.sections : Array.isArray(level.Sections) ? level.Sections : []) as NbtValue[]
     if (dvn != null && dvn < 1451) { legacy++; continue }
     const spanning = dvn != null && dvn < 2527
     for (const s of secs) {
       if (!isCompound(s)) continue
       const sy = num(s.Y) ?? 0
+      if (opts.yMin != null && sy * 16 + 15 < opts.yMin) continue
+      if (opts.yMax != null && sy * 16 > opts.yMax) continue
       let palRaw: NbtValue | undefined, dataRaw: NbtValue | undefined
       if (isCompound(s.block_states)) { palRaw = s.block_states.palette; dataRaw = s.block_states.data }
       else { palRaw = s.Palette; dataRaw = s.BlockStates }
@@ -372,29 +413,35 @@ async function parseRegion(bytes: Uint8Array, warnings: string[], onProgress?: (
       sections.push({ x: cx * 16, y: sy * 16, z: cz * 16, pal, idx })
     }
   }
-  if (lz4) warnings.push(`${lz4} chunks usan compresión LZ4 (no compatible) y se omitieron.`)
-  if (bad) warnings.push(`${bad} chunks no se pudieron leer y se omitieron.`)
-  if (legacy) throw new FormatError('Este mundo es anterior a Minecraft 1.13 (IDs numéricos). Solo se admiten regiones 1.13+.')
-  if (!sections.length) throw new FormatError(chunks ? 'La región no contiene bloques sólidos' : 'No se encontró ningún chunk en el archivo de región')
-  // Recorte al contenido no-aire
+  return { sections, maxDataVersion, lz4, bad, legacy, chunks }
+}
+
+/**
+ * Une secciones en un único modelo recortado al contenido. Con `bounds` solo entran los bloques de ese
+ * prisma (coordenadas de mundo, incluidas): así un área de un mundo no arrastra el resto de los chunks.
+ */
+export function assembleSections(sections: RegionSection[], bounds?: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }, onProgress?: (f: number) => void): VoxelModel {
+  const inside = (x: number, y: number, z: number): boolean => !bounds || (x >= bounds.x0 && x <= bounds.x1 && y >= bounds.y0 && y <= bounds.y1 && z >= bounds.z0 && z <= bounds.z1)
   let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
   for (const s of sections) {
+    const air = s.pal.map(isAirState)
     for (let k = 0; k < 4096; k++) {
-      const st = s.pal[s.idx ? s.idx[k] : 0]
-      if (!st || isAirState(st)) continue
+      if (air[s.idx ? s.idx[k] : 0] !== false) continue
       const x = s.x + (k & 15), z = s.z + ((k >> 4) & 15), y = s.y + (k >> 8)
+      if (!inside(x, y, z)) continue
       if (x < minX) minX = x; if (x > maxX) maxX = x
       if (y < minY) minY = y; if (y > maxY) maxY = y
       if (z < minZ) minZ = z; if (z > maxZ) maxZ = z
     }
   }
+  if (maxX < minX) throw new FormatError('La zona elegida no contiene bloques sólidos')
   const SX = maxX - minX + 1, SY = maxY - minY + 1, SZ = maxZ - minZ + 1
   checkVolume(SX, SY, SZ)
   const palette: string[] = ['minecraft:air']
   const pIdx = new Map<string, number>([['minecraft:air', 0]])
   const data = new Uint16Array(SX * SY * SZ)
   sections.forEach((s, si) => {
-    if (onProgress && si % 64 === 0) onProgress(0.6 + (si / sections.length) * 0.4)
+    if (onProgress && si % 64 === 0) onProgress(si / sections.length)
     const map = s.pal.map((st) => {
       if (isAirState(st)) return 0
       let i = pIdx.get(st)
@@ -404,13 +451,24 @@ async function parseRegion(bytes: Uint8Array, warnings: string[], onProgress?: (
     for (let k = 0; k < 4096; k++) {
       const g = map[s.idx ? s.idx[k] : 0]
       if (!g) continue
-      const x = s.x + (k & 15) - minX, z = s.z + ((k >> 4) & 15) - minZ, y = s.y + (k >> 8) - minY
-      data[(y * SZ + z) * SX + x] = g
+      const wx = s.x + (k & 15), wz = s.z + ((k >> 4) & 15), wy = s.y + (k >> 8)
+      if (!inside(wx, wy, wz)) continue
+      data[((wy - minY) * SZ + (wz - minZ)) * SX + (wx - minX)] = g
     }
   })
+  return { sx: SX, sy: SY, sz: SZ, data, palette }
+}
+
+async function parseRegion(bytes: Uint8Array, warnings: string[], onProgress?: (f: number) => void): Promise<{ model: VoxelModel; meta: Partial<ParseMeta> }> {
+  const r = await readRegionSections(bytes, { onProgress: onProgress && ((f) => onProgress(f * 0.6)) })
+  if (r.lz4) warnings.push(`${r.lz4} chunks usan compresión LZ4 (no compatible) y se omitieron.`)
+  if (r.bad) warnings.push(`${r.bad} chunks no se pudieron leer y se omitieron.`)
+  if (r.legacy) throw new FormatError('Este mundo es anterior a Minecraft 1.13 (IDs numéricos). Solo se admiten regiones 1.13+.')
+  if (!r.sections.length) throw new FormatError(r.chunks ? 'La región no contiene bloques sólidos' : 'No se encontró ningún chunk en el archivo de región')
+  const model = assembleSections(r.sections, undefined, onProgress && ((f) => onProgress(0.6 + f * 0.4)))
   return {
-    model: { sx: SX, sy: SY, sz: SZ, data, palette },
-    meta: { format: 'region', formatLabel: 'Región de mundo Anvil (.mca)', version: null, dataVersion: maxDataVersion, regions: chunks }
+    model,
+    meta: { format: 'region', formatLabel: 'Región de mundo Anvil (.mca)', version: null, dataVersion: r.maxDataVersion, regions: r.chunks }
   }
 }
 

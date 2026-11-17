@@ -84,6 +84,9 @@ export function Viewport(): JSX.Element {
               <button className="btn" onClick={importBuildsAction}>
                 <Icon name="import" /> Importar construcciones…
               </button>
+              <button className="btn" onClick={() => useStore.getState().setModal({ type: 'world' })} title="Importa una zona de uno de tus mundos de Minecraft (Ctrl+Mayús+I)">
+                <Icon name="water" /> Importar mundo…
+              </button>
               <button className="btn" onClick={loadDemoAction} title="Carga una casa GENERADA de ejemplo, marcada como tal">
                 Escena de ejemplo
               </button>
