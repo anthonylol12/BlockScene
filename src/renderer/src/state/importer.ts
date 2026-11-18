@@ -108,13 +108,17 @@ function nextSlot(width: number): number {
   return right === -Infinity ? 0 : right + 6 + width / 2
 }
 
-export async function importFiles(files: { name: string; data: Uint8Array | null; error?: string }[], opts: { isDemo?: boolean } = {}): Promise<string[]> {
+export async function importFiles(files: { name: string; data: Uint8Array | null; error?: string }[], opts: { isDemo?: boolean; quiet?: boolean; onError?: (file: string, message: string) => void } = {}): Promise<string[]> {
+  // quiet: sin informe ni avisos (el asistente muestra los datos y errores en su propio panel)
+  const fail = (file: string, message: string): void => {
+    opts.onError?.(file, message)
+    if (!opts.quiet) useStore.getState().toast({ kind: 'error', title: `No se pudo importar ${file}`, detail: message })
+  }
   const ok: string[] = []
   await Promise.all(
     files.map(async (f) => {
-      const st = useStore.getState()
       if (!f.data) {
-        st.toast({ kind: 'error', title: `No se pudo importar ${f.name}`, detail: f.error })
+        fail(f.name, f.error ?? 'No se pudo leer el archivo')
         return
       }
       const assetId = uid('asset')
@@ -132,15 +136,15 @@ export async function importFiles(files: { name: string; data: Uint8Array | null
         obj.transform.position = [nextSlot(info.width), 0, 0]
         s2.addObject(obj)
         ok.push(assetId)
-        if (info.warnings.length)
+        if (info.warnings.length && !opts.quiet)
           s2.toast({ kind: 'warning', title: `${f.name}: importado con avisos`, detail: info.warnings.join(' · ') }, 9000)
       } catch (e) {
         meshCache.delete(assetId)
-        useStore.getState().toast({ kind: 'error', title: `No se pudo importar ${f.name}`, detail: (e as Error).message })
+        fail(f.name, (e as Error).message)
       }
     })
   )
-  if (ok.length && !opts.isDemo) useStore.getState().setModal({ type: 'importReport', assetIds: ok })
+  if (ok.length && !opts.isDemo && !opts.quiet) useStore.getState().setModal({ type: 'importReport', assetIds: ok })
   return ok
 }
 

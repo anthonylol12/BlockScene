@@ -254,3 +254,25 @@ table.info td:first-child { color: var(--text2); width: 38%; }
 .studio > .center { grid-column: 3; grid-row: 1; }
 .studio > .splitter.right { grid-column: 4; }
 .studio > .panel.right { grid-column: 5; }
+
+/* ---------- asistente de nueva escena (panel flotante sobre el visor) */
+.wizard { position: fixed; left: calc(var(--left, 260px) + 16px); bottom: 64px; width: min(440px, calc(100vw - 40px)); max-height: calc(100vh - 140px); display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--line2); border-radius: 12px; box-shadow: 0 24px 70px rgba(0,0,0,0.55); z-index: 150; }
+.wizard-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.wizard-steps { display: flex; gap: 2px; list-style: none; margin: 0; padding: 6px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.wizard-steps button { background: none; border: 0; padding: 3px 6px; border-radius: 5px; font-size: 11.5px; color: var(--text3); }
+.wizard-steps button:disabled { cursor: default; }
+.wizard-steps li.done button { color: var(--ok); }
+.wizard-steps li.on button { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.wizard-body { padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.wizard-body p { margin: 0; }
+.wizard-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.wizard-foot .grow { flex: 1; }
+.wizard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+button.tpl-card { text-align: left; color: var(--text); font: inherit; }
+.tpl-card.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.wizard-pre { white-space: pre-wrap; margin: 0; font: 11.5px var(--font); user-select: text; }
+.wizard-embed .section { border: 1px solid var(--line); border-radius: 8px; }
+
+/* Importar mundo */
+.world-list { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow: auto; }
+.world-list .tpl-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }

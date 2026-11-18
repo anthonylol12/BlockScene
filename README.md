@@ -21,6 +21,18 @@ Aplicación de escritorio gratuita para crear **escenas 3D y láminas de present
 
 > **Cómo usarlo:** consulta la [wiki](https://github.com/anthonylol12/BlockScene/wiki) o descarga la guía en PDF (`BlockScene-Guia.pdf`) desde [Releases](https://github.com/anthonylol12/BlockScene/releases/latest). Las páginas de la wiki están en [`docs/wiki`](docs/wiki) y la guía se genera con `npx electron scripts/make-guide.cjs`.
 
+## Empezar
+
+Abre la app y pulsa **Crear escena paso a paso** (o **Ctrl+Mayús+N**). El asistente te guía por los pasos:
+
+1. importar la construcción, con una vista previa de sus datos;
+2. elegir texturas;
+3. crear una base ajustada a su tamaño;
+4. escoger un estilo, viendo qué cambia;
+5. renderizar.
+
+Al final se abre la lámina lista en el Compositor. Después de cualquier render, **Añadir a lámina** hace lo mismo con la plantilla que elijas.
+
 ## Requisitos
 
 - Windows 10/11 (también debería funcionar en macOS/Linux, pero no se ha probado).
@@ -201,6 +213,7 @@ La fuente **Minecraft (de tu juego)** se lee de tu copia de Minecraft (`textures
 | `.nbt` | Estructura de Minecraft (Structure Block) | Completo; si hay varias paletas, se usa la primera |
 | `.schematic` | MCEdit / WorldEdit clásico (IDs pre-1.13) | Parcial: se traducen los bloques más comunes; el resto se marca como desconocido |
 | `.mca` | Región de mundo Anvil (Java 1.13+) | Parcial: se recorta al contenido; los chunks LZ4 se omiten |
+| Carpeta de mundo | Mundo completo (`level.dat` + regiones) | Se importa una zona elegida (hasta 512×512 bloques) |
 
 - El formato se detecta por el **contenido**, no solo por la extensión. gzip y zlib se descomprimen automáticamente.
 - Los datos que se muestran (formato, versión, dimensiones, número de bloques, autor) se leen del archivo. Si un dato no está en el archivo, no se muestra.
@@ -214,11 +227,12 @@ La fuente **Minecraft (de tu juego)** se lee de tu copia de Minecraft (`textures
 - Colecciones (capas), mostrar/ocultar, seleccionar, quitar, renombrar.
 - Mover, girar y escalar con gizmo o con valores numéricos; duplicar; deshacer/rehacer.
 - Cámara: órbita, zoom y desplazamiento; vistas frontal, lateral, superior, isométrica (ortográfica), ¾ y perspectiva; FOV; vistas guardadas y cámara principal.
-- Animación: giro de 360° de la cámara y ciclo solar.
+- Animación: giro de 360° de la cámara y ciclo solar, en el visor y **exportados como vídeo MP4/WebM o GIF animado** (cada fotograma es un render real).
+- **Importar mundos de Minecraft** (Java 1.13+ y el formato de carpetas de 26.x): eliges mundo, dimensión, centro, tamaño y alturas, y la zona se importa como una construcción.
 - Elementos de escena hechos de bloques: base de exhibición, terreno (con hierba, flores y árboles), agua, caminos, rocas, árboles (9 especies), vegetación, luces y decoración (farola, valla, banco, hoguera, pozo, barril).
 - Ambiente: hora del día, orientación, color e intensidad del sol, sombras con suavidad, luz ambiental, exposición; cielo con sol cuadrado y estrellas; nubes de bloques o volumétricas (densidad, escala, detalle, altura, viento); niebla con densidad y altura; lluvia y nieve.
 - Materiales: acabado mate, suave o brillante, oclusión ambiental por vértice, variación de color, texturas on/off. Calidad: baja, media o alta; GTAO; reflejos del mapa de entorno.
-- **Vista previa rápida** (visor en tiempo real, o imagen de 1 muestra) y **render final** real a la resolución elegida, con 1–64 muestras acumuladas (suavizado de bordes y de sombras), fondo transparente opcional y render aislado de una construcción. Antes de renderizar se comprueba el tamaño máximo que admite la GPU.
+- **Vista previa rápida** (visor en tiempo real, o imagen de 1 muestra) y **render final** real a la resolución elegida, con 1–64 muestras acumuladas (suavizado de bordes y de sombras), **nitidez 2× o 3×** (superresolución), fondo transparente opcional y render aislado de una construcción. Antes de renderizar se comprueba el tamaño máximo que admite la GPU.
 - Proyectos `.bscene`: guardan objetos, posiciones, cámaras, ajustes, archivos originales, renders y láminas.
 - Escena de demostración opcional, marcada como **EJEMPLO**. Su casa es una construcción generada, no un archivo del usuario.
 
@@ -232,7 +246,7 @@ La fuente **Minecraft (de tu juego)** se lee de tu copia de Minecraft (`textures
 - Formatos predefinidos (Full HD, 2K, 4K, cuadrado, 9:16, A4, A3, póster) y personalizado (ancho y alto en píxeles), con definición rápida, alta o máxima (sobremuestreo ×1, ×2 o ×3). Avisa si el tamaño o la calidad superan lo que admite el equipo.
 - Exportación PNG/JPG con vista previa de la imagen final. El archivo se comprueba en disco antes de confirmar.
 
-**Atajos principales**: Ctrl+N/O/S, Ctrl+I importar, Ctrl+Z/Y, Ctrl+D, Supr, H, G/R/S, F, 1/3/7/9/4/5 vistas, Ctrl+K guardar vista, Espacio giro, F12 render, Ctrl+1/2 espacios, Ctrl+E exportar, F1 lista completa.
+**Atajos principales**: Ctrl+N/O/S, Ctrl+I importar, Ctrl+Z/Y, Ctrl+D, Supr, H, G/R/S, F, 1/3/7/9/4/5 vistas, Ctrl+K guardar vista, Espacio giro, F12 render, Ctrl+Mayús+F12 vídeo/GIF, Ctrl+Mayús+I importar mundo, Ctrl+1/2 espacios, Ctrl+E exportar, F1 lista completa.
 
 ## Limitaciones conocidas
 
@@ -271,8 +285,8 @@ scripts         pruebas de humo y de extremo a extremo
 ## Próximos pasos
 
 1. Leer los modelos JSON de bloque de Minecraft para cubrir todas las formas (esquinas de escalera, faroles, cofres, camas…) y las caras frontales orientadas.
-2. Tintes de bioma y texturas animadas (agua, lava).
+2. Tintes de bioma y texturas animadas (agua, lava): en los vídeos el agua y la lava no se mueven.
 3. Firma de código y actualizaciones automáticas del instalador.
 4. Render con trazado de rayos (path tracing) opcional.
-5. Animaciones de cámara entre vistas guardadas y exportación de vídeo.
+5. Animaciones de cámara entre vistas guardadas (el giro 360° y el ciclo solar ya se exportan como vídeo o GIF).
 6. Composición por lotes: una ficha por cada construcción del proyecto.

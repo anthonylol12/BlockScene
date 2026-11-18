@@ -204,7 +204,7 @@ function SceneProps(): JSX.Element {
   )
 }
 
-function TexturesSection(): JSX.Element {
+export function TexturesSection(): JSX.Element {
   const [, force] = useState(0)
   const [installs, setInstalls] = useState<{ version: string; path: string }[]>([])
   useEffect(() => atlas.subscribe(() => force((x) => x + 1)), [])

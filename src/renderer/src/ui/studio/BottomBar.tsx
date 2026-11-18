@@ -56,6 +56,9 @@ export function BottomBar(): JSX.Element {
         <button className={`btn small ${sunCycle ? 'primary' : ''}`} title="Anima la hora del día (≈1,2 h por segundo)" onClick={() => st.setSunCycle(!sunCycle)}>
           <Icon name={sunCycle ? 'pause' : 'sun'} size={12} /> Ciclo solar
         </button>
+        <button className="btn small" title="Guarda el giro 360° o el ciclo solar como vídeo MP4/WebM o GIF (Ctrl+Mayús+F12)" onClick={() => st.setModal({ type: 'animation' })}>
+          <Icon name="camera" size={12} /> Vídeo / GIF…
+        </button>
       </div>
     </div>
   )

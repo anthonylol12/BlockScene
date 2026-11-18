@@ -45,6 +45,10 @@ const api = {
     ipcRenderer.on('project:openRequested', () => fn())
   },
   setDirty: (d: boolean): void => ipcRenderer.send('app:setDirty', d),
+  worldList: (): Promise<{ path: string; folder: string; modified: number }[]> => ipcRenderer.invoke('world:list'),
+  worldPick: (): Promise<string | { error: string } | null> => ipcRenderer.invoke('world:pick'),
+  worldInfo: (worldPath: string): Promise<{ level: Uint8Array; dims: Record<string, { dir: string; count: number }>; folder: string } | { error: string }> => ipcRenderer.invoke('world:info', worldPath),
+  worldReadRegions: (args: { worldPath: string; dimDir: string; files: string[] }): Promise<{ file: string; data: Uint8Array | null }[]> => ipcRenderer.invoke('world:readRegions', args),
   setTitle: (t: string): void => ipcRenderer.send('app:setTitle', t)
 }
 

@@ -8,6 +8,10 @@ import { renderCompositionBlob } from '../compositor/compActions'
 import { PAGE_PRESETS, QUALITY_INFO, checkCapacity } from '../compositor/pageFormats'
 import { BuildInfoView } from './studio/RightPanel'
 import { PrefsModal } from './PrefsModal'
+import { Wizard } from './Wizard'
+import { AnimationDialog } from './AnimationDialog'
+import { WorldDialog } from './WorldDialog'
+import { AddToSheet } from './AddToSheet'
 import { Field, Modal, NumInput, Seg, Select, Toggle, fmtBytes } from './controls'
 
 export function Modals(): JSX.Element | null {
@@ -23,6 +27,9 @@ export function Modals(): JSX.Element | null {
     case 'shortcuts': return <Shortcuts onClose={close} />
     case 'renderView': return <RenderView id={modal.renderId} onClose={close} />
     case 'prefs': return <PrefsModal onClose={close} />
+    case 'wizard': return <Wizard onClose={close} />
+    case 'animation': return <AnimationDialog onClose={close} />
+    case 'world': return <WorldDialog onClose={close} />
     default: return null
   }
 }
@@ -87,6 +94,7 @@ function RenderDialog({ onClose }: { onClose: () => void }): JSX.Element {
   const [w, setW] = useState(1920)
   const [h, setH] = useState(1080)
   const [samples, setSamples] = useState(16)
+  const [scale, setScale] = useState(2)
   const [cam, setCam] = useState<string>(mainId ?? 'current')
   const [transparent, setTransparent] = useState(false)
   const [isolate, setIsolate] = useState(false)
@@ -95,7 +103,8 @@ function RenderDialog({ onClose }: { onClose: () => void }): JSX.Element {
   const lim = useMemo(() => Engine.gpuLimits(), [])
   const maxSide = Math.min(lim.maxSize, lim.maxViewport[0], lim.maxViewport[1], 8192)
   const tooBig = w > maxSide || h > maxSide
-  const memMB = Math.round((w * h * (4 + 8)) / 1048576)
+  const sEff = tooBig ? 1 : Engine.effectiveScale(w, h, scale)
+  const memMB = Math.round((w * h * sEff * sEff * (4 + 8)) / 1048576)
 
   const go = async (quick: boolean): Promise<void> => {
     setBusy(true)
@@ -104,7 +113,7 @@ function RenderDialog({ onClose }: { onClose: () => void }): JSX.Element {
     const qw = quick ? Math.min(960, w) : w
     const qh = quick ? Math.round(qw * (h / w)) : h
     const r = await renderToGallery({
-      width: qw, height: qh, samples: quick ? 1 : samples,
+      width: qw, height: qh, samples: quick ? 1 : samples, scale: quick ? 1 : scale,
       cameraId: cam, transparent, isolateId: isolate && selected?.kind === 'build' ? selected.id : undefined,
       name: quick ? `Vista previa ${new Date().toLocaleTimeString('es-ES')}` : undefined
     })
@@ -141,6 +150,10 @@ function RenderDialog({ onClose }: { onClose: () => void }): JSX.Element {
           <Field label="Muestras" title="Imágenes acumuladas con desplazamiento subpíxel y del sol: suavizan bordes y sombras">
             <Seg value={String(samples)} onChange={(v) => setSamples(+v)} options={[{ value: '1', label: '1' }, { value: '4', label: '4' }, { value: '16', label: '16' }, { value: '32', label: '32' }, { value: '64', label: '64' }]} />
           </Field>
+          <Field label="Nitidez" title="Superresolución: se renderiza al doble o al triple de tamaño y se reduce. Texturas y bordes quedan más definidos; tarda más.">
+            <Seg value={String(scale)} onChange={(v) => setScale(+v)} options={[{ value: '1', label: 'Normal' }, { value: '2', label: 'Alta 2×' }, { value: '3', label: 'Máxima 3×' }]} />
+          </Field>
+          {!tooBig && sEff < scale && <div className="hint warn">Con este tamaño tu tarjeta gráfica admite como máximo {sEff}× de nitidez; se usará {sEff}×.</div>}
           <Field label="Cámara">
             <Select value={cam} onChange={setCam} options={[{ value: 'current', label: 'Vista actual del visor' }, ...cameras.map((c) => ({ value: c.id, label: `${c.name}${c.id === mainId ? ' (principal)' : ''}` }))]} />
           </Field>
@@ -170,7 +183,7 @@ function RenderDialog({ onClose }: { onClose: () => void }): JSX.Element {
         <div className="callout ok" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span>Render generado: {r.width}×{r.height} px. Ya está en la galería.</span>
           <img className="preview-img" src={r.dataUrl} alt="Resultado del render" style={{ maxHeight: '36vh' }} />
-          <div className="row"><button className="btn small" onClick={() => downloadRender(r)}>Guardar PNG…</button></div>
+          <div className="row wrap"><button className="btn small" onClick={() => downloadRender(r)}>Guardar PNG…</button><span style={{ flex: 1 }} /><AddToSheet renderId={r.id} transparent={transparent} onDone={onClose} /></div>
         </div>
       )}
     </Modal>
@@ -315,7 +328,7 @@ function RenderView({ id, onClose }: { id: string; onClose: () => void }): JSX.E
   const r = useStore((s) => s.project.renders.find((x) => x.id === id))
   if (!r) return <Modal title="Render" onClose={onClose}>El render ya no existe.</Modal>
   return (
-    <Modal title={r.name} onClose={onClose} wide footer={<><button className="btn" onClick={() => downloadRender(r)}>Guardar PNG…</button><button className="btn primary" onClick={() => { useStore.getState().setWorkspace('compositor'); onClose() }}>Ir al Compositor</button></>}>
+    <Modal title={r.name} onClose={onClose} wide footer={<><button className="btn" onClick={() => downloadRender(r)}>Guardar PNG…</button><span className="grow" /><AddToSheet renderId={r.id} transparent={!!r.transparent || r.source === 'isolated'} onDone={onClose} /></>}>
       <img className="preview-img" src={r.dataUrl} alt={r.name} />
       <div className="kv"><span>Tamaño</span><span>{r.width}×{r.height} px</span><span>Muestras</span><span>{r.samples ?? '—'}</span><span>Creado</span><span>{new Date(r.createdAt).toLocaleString('es-ES')}</span></div>
     </Modal>
@@ -337,6 +350,8 @@ export const SHORTCUTS: [string, string][] = [
   ['Ctrl+K', 'Guardar vista de cámara'],
   ['Espacio', 'Giro 360° de la cámara'],
   ['F12', 'Render final'],
+  ['Ctrl+Mayús+F12', 'Exportar animación (vídeo o GIF)'],
+  ['Ctrl+Mayús+I', 'Importar mundo de Minecraft'],
   ['Ctrl+1 / Ctrl+2', 'Estudio 3D / Compositor'],
   ['Ctrl+E', 'Exportar lámina'],
   ['Flechas (+Mayús)', 'Mover elemento de la lámina 1 px (10 px)'],

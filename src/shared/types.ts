@@ -120,6 +120,8 @@ export interface RenderItem {
   objectId?: string
   buildInfo?: BuildInfo
   samples?: number
+  /** renderizado con fondo transparente (recortado al contenido) */
+  transparent?: boolean
 }
 
 export type PageQuality = 'fast' | 'high' | 'max'

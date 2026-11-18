@@ -97,5 +97,9 @@
     "3d",
     "electron",
     "blockscene"
-  ]
+  ],
+  "dependencies": {
+    "gifenc": "^1.0.3",
+    "mediabunny": "^1.66.0"
+  }
 }

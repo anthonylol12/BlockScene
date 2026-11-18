@@ -85,14 +85,14 @@ describe('MCEdit .schematic', () => {
       Height: { t: 'short', v: 1 },
       Length: { t: 'short', v: 1 },
       Materials: { t: 'string', v: 'Alpha' },
-      Blocks: { t: 'byteArray', v: Uint8Array.from([35, 1, 250]) },
+      Blocks: { t: 'byteArray', v: Uint8Array.from([35, 1, 254]) },
       Data: { t: 'byteArray', v: Uint8Array.from([14, 3, 0]) }
     })
     const { model, info } = await parseBuildFile('viejo.schematic', file)
     expect(model.palette[model.data[0]]).toBe('minecraft:red_wool')
     expect(model.palette[model.data[1]]).toBe('minecraft:diorite')
-    expect(model.palette[model.data[2]]).toBe('legacy:250')
-    expect(info.warnings.join(' ')).toContain('250')
+    expect(model.palette[model.data[2]]).toBe('legacy:254')
+    expect(info.warnings.join(' ')).toContain('254')
     expect(info.blockCount).toBe(3)
   })
 })

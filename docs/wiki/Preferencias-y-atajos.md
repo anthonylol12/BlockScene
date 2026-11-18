@@ -18,6 +18,7 @@ Abre **Editar → Preferencias…** (Ctrl+,) o el **engranaje** de la barra supe
 |---|---|
 | Ctrl+N / Ctrl+O / Ctrl+S | Nuevo / abrir / guardar proyecto |
 | Ctrl+I | Importar construcciones |
+| Ctrl+Mayús+I | Importar un mundo de Minecraft |
 | Ctrl+Z / Ctrl+Y | Deshacer / rehacer |
 | Ctrl+D / Supr / H | Duplicar / quitar / ocultar |
 | G / R / S | Mover / girar / escalar |
@@ -26,6 +27,7 @@ Abre **Editar → Preferencias…** (Ctrl+,) o el **engranaje** de la barra supe
 | Ctrl+K | Guardar la vista de cámara |
 | Espacio | Giro 360° |
 | F12 | Render final |
+| Ctrl+Mayús+F12 | Exportar vídeo o GIF |
 | Ctrl+1 / Ctrl+2 | Estudio 3D / Compositor |
 | Ctrl+E | Exportar lámina |
 | Ctrl+, | Preferencias |

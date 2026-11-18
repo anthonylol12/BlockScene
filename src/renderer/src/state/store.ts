@@ -35,6 +35,9 @@ export type ModalState =
   | { type: 'renderView'; renderId: string }
   | { type: 'pageSetup' }
   | { type: 'prefs' }
+  | { type: 'wizard' }
+  | { type: 'animation' }
+  | { type: 'world' }
 
 interface State {
   project: Project

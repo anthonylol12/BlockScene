@@ -3,6 +3,7 @@ import type { ObjectKind, RenderItem } from '@shared/types'
 import { useStore } from './store'
 import { makeObject, uid, KIND_LABEL } from './defaults'
 import { getEngine, type StandardView } from '../engine/Engine'
+import { FORMAT_INFO, frameCount, frameSpecs, makeEncoder, type AnimOptions } from './animation'
 
 const st = (): ReturnType<typeof useStore.getState> => useStore.getState()
 
@@ -91,6 +92,8 @@ export async function renderToGallery(opts: {
   isolateId?: string
   transparent: boolean
   name?: string
+  /** superresolución (1 = normal) */
+  scale?: number
 }): Promise<RenderItem | null> {
   const e = getEngine()
   const s = st()
@@ -110,6 +113,7 @@ export async function renderToGallery(opts: {
       view,
       isolateId: opts.isolateId,
       transparent: opts.transparent,
+      scale: opts.scale,
       cancelled: () => cancelFlag,
       onProgress: (f, label) => st().updateJob(job, f, label)
     })
@@ -126,7 +130,8 @@ export async function renderToGallery(opts: {
       source: opts.isolateId ? 'isolated' : 'scene',
       objectId: opts.isolateId,
       buildInfo: info,
-      samples: opts.samples
+      samples: opts.samples,
+      transparent: opts.transparent
     }
     st().addRender(item)
     st().toast({
@@ -158,4 +163,49 @@ export async function downloadRender(r: RenderItem): Promise<void> {
   const bytes = Uint8Array.from(atob(r.dataUrl.split(',')[1]), (c) => c.charCodeAt(0))
   const res = await window.api.saveBinary({ suggestedName: `${r.name.replace(/[\\/:*?"<>|]/g, '_')}.png`, filterName: 'Imagen PNG', extensions: ['png'], data: bytes })
   if (res) st().toast({ kind: 'success', title: 'PNG guardado', detail: res.path, action: { label: 'Mostrar en carpeta', run: () => window.api.showItem(res.path) } })
+}
+
+/**
+ * Animación real: renderiza cada fotograma con el motor de render final y lo codifica (MP4, WebM o GIF).
+ * Devuelve la ruta guardada, o null si se canceló o falló.
+ */
+export async function exportAnimation(o: AnimOptions, cameraId: string | 'current', onProgress?: (f: number, label: string) => void): Promise<{ path: string; size: number } | null> {
+  const e = getEngine()
+  const s = st()
+  if (!e) {
+    s.toast({ kind: 'error', title: 'El visor 3D no está activo', detail: 'Vuelve al Estudio 3D para exportar la animación.' })
+    return null
+  }
+  const view = cameraId === 'current' ? null : (s.project.cameras.find((c) => c.id === cameraId) ?? null)
+  const n = frameCount(o)
+  const info = FORMAT_INFO[o.format]
+  const job = s.startJob(`${info.label} ${o.width}×${o.height}`)
+  cancelFlag = false
+  const t0 = performance.now()
+  try {
+    const enc = await makeEncoder(o)
+    await e.renderSequence(
+      { width: o.width, height: o.height, samples: o.samples, scale: o.scale, view, transparent: false, trim: false, cancelled: () => cancelFlag,
+        onProgress: (f, label) => { st().updateJob(job, f * 0.97, label); onProgress?.(f * 0.97, label) } },
+      n, frameSpecs(o), (c, i) => enc.add(c, i)
+    )
+    onProgress?.(0.98, `Codificando ${info.label}`)
+    const data = await enc.finish()
+    const base = s.project.objects.filter((x) => x.kind === 'build' && x.visible).map((x) => x.name.replace(/^EJEMPLO · /, ''))[0] ?? 'Animación'
+    const kindName = o.kind === 'sun' ? 'ciclo solar' : o.kind === 'both' ? 'giro y ciclo solar' : 'giro 360'
+    const res = await window.api.saveBinary({ suggestedName: `${base} - ${kindName}.${info.ext}`.replace(/[\/:*?"<>|]/g, '_'), filterName: info.filter, extensions: [info.ext], data })
+    if (res) {
+      st().toast({
+        kind: 'success', title: `${info.label} guardado`,
+        detail: `${n} fotogramas · ${o.width}×${o.height} · ${(res.size / 1048576).toFixed(1)} MB · ${((performance.now() - t0) / 1000).toFixed(0)} s`,
+        action: { label: 'Mostrar en carpeta', run: () => window.api.showItem(res.path) }
+      })
+    }
+    return res
+  } catch (err) {
+    st().toast({ kind: 'error', title: 'La animación no se completó', detail: (err as Error).message })
+    return null
+  } finally {
+    st().endJob(job)
+  }
 }
