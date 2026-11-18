@@ -13,7 +13,7 @@ export const defaultEnvironment = (): EnvironmentSettings => ({
   ambientIntensity: 0.9,
   skyTint: '#5d9bff',
   clouds: { enabled: true, style: 'blocky', density: 0.45, scale: 1, detail: 4, height: 140, speed: 0.4 },
-  fog: { enabled: true, density: 0.2, height: 30, color: '#c9d8ea' },
+  fog: { enabled: true, density: 0.12, height: 30, color: '#d3d9e0' },
   weather: 'clear',
   weatherIntensity: 0.6,
   material: { style: 'soft', vertexAO: true, colorVariation: 0.05, pixelTexture: true },

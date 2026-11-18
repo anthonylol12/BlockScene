@@ -48,7 +48,8 @@ export function WorldDialog({ onClose }: { onClose: () => void }): JSX.Element {
   }
   const setDimension = (d: Dimension): void => {
     setDim(d)
-    if (d === 'nether') { setY0(0); setY1(128) }
+    // Nether: hasta Y=122 para no incluir el techo de lecho de roca (123-127), que taparía la zona
+    if (d === 'nether') { setY0(0); setY1(122) }
     if (d === 'end') { setY0(0); setY1(128) }
     if (d === 'overworld' && w) { setY0(Math.max(-64, w.level.spawn.y - 24)); setY1(Math.min(320, w.level.spawn.y + 96)) }
   }

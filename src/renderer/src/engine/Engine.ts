@@ -28,6 +28,9 @@ interface Entry {
 
 type BuildGeo = Record<(typeof GROUPS)[number], THREE.BufferGeometry | null>
 
+/** Ganancia de la luz ambiental (ver applyEnv) */
+export const AMBIENT_GAIN = 2.5
+
 export interface StillOptions {
   width: number
   height: number
@@ -571,10 +574,16 @@ export class Engine {
     this.sun.shadow.radius = 1 + env.shadowSoftness * 7
     this.sun.shadow.blurSamples = 8 + Math.round(env.shadowSoftness * 16)
 
+    // luz del cielo: se conserva el matiz del estilo pero a media saturación, para que los bloques en sombra
+    // mantengan su color real (la piedra gris, no azul)
     const amb = new THREE.Color(env.ambientColor)
+    const lum = amb.r * 0.2126 + amb.g * 0.7152 + amb.b * 0.0722
+    amb.lerp(new THREE.Color(lum, lum, lum), 0.55)
     this.hemi.color.copy(amb).multiplyScalar(0.12 + 0.88 * day)
     this.hemi.groundColor.copy(amb).lerp(new THREE.Color('#5a4a38'), 0.7).multiplyScalar(0.1 + 0.6 * day)
-    this.hemi.intensity = env.ambientIntensity
+    // three.js usa unidades físicas (el difuso se divide entre π): sin compensarlo, las caras en sombra quedaban
+    // casi negras y la niebla y el reflejo del cielo las teñían de azul
+    this.hemi.intensity = env.ambientIntensity * AMBIENT_GAIN
 
     const gray = new THREE.Color('#8b939c')
     const zenith = new THREE.Color(env.skyTint).multiplyScalar(0.03 + 0.97 * day).lerp(new THREE.Color('#05070d'), 1 - day).lerp(gray.clone().multiplyScalar(day * 0.8), wI * 0.7)
@@ -625,9 +634,12 @@ export class Engine {
     const style = env.material.style
     this.matOpaque.roughness = style === 'matte' ? 1 : style === 'soft' ? 0.82 : 0.38
     this.matOpaque.metalness = style === 'glossy' ? 0.05 : 0
-    this.matOpaque.envMapIntensity = env.quality.reflections ? (style === 'glossy' ? 1 : 0.6) : 0.25
+    // el mapa de entorno es el cielo (azul): en bloques mates su luz difusa teñía de azul las caras en sombra
+    // (la piedra parecía arcilla azul). Se deja fuerte solo en acabado brillante y en el agua/cristal.
+    this.matOpaque.envMapIntensity = env.quality.reflections ? (style === 'glossy' ? 1 : 0.2) : 0.1
     this.matTrans.envMapIntensity = env.quality.reflections ? 1.2 : 0.3
     this.matCutout.roughness = this.matOpaque.roughness
+    this.matCutout.envMapIntensity = this.matOpaque.envMapIntensity
     const map = env.material.pixelTexture ? this.atlasTex : null
     for (const m of [this.matOpaque, this.matCutout, this.matTrans, this.matEmissive]) {
       if (m.map !== map) {
@@ -663,13 +675,29 @@ export class Engine {
       const env = useStore.getState().project.environment
       if (!env.quality.reflections) {
         this.scene.environment = null
+        this.setMatEnv(null)
         return
       }
       const rt = this.pmrem.fromScene(this.envScene, 0, 0.1, 1000)
       this.envRT?.dispose()
       this.envRT = rt
       this.scene.environment = rt.texture
+      this.setMatEnv(rt.texture)
     }, 250)
+  }
+
+  /**
+   * El mapa de entorno se asigna a cada material de bloque: en three.js actual `envMapIntensity` solo se aplica
+   * al `envMap` del propio material (con el de la escena se usaba siempre a intensidad 1 y teñía de cielo
+   * todas las caras en sombra).
+   */
+  private setMatEnv(tex: THREE.Texture | null): void {
+    for (const m of [this.matOpaque, this.matCutout, this.matTrans]) {
+      if (m.envMap === tex) continue
+      const toggled = !m.envMap !== !tex
+      m.envMap = tex
+      if (toggled) m.needsUpdate = true
+    }
   }
 
   private fitShadowCamera(): void {
@@ -897,6 +925,7 @@ export class Engine {
         offPmrem = new THREE.PMREMGenerator(off)
         offEnv = offPmrem.fromScene(this.envScene, 0, 0.1, 1000)
         this.scene.environment = offEnv.texture
+        this.setMatEnv(offEnv.texture)
       }
 
       // cámara
@@ -1017,6 +1046,7 @@ export class Engine {
       for (const h of hidden) h.visible = true
       this.scene.fog = prevFog
       this.scene.environment = prevEnv
+      this.setMatEnv(prevEnv)
       this.skyMat.uniforms.uTime.value = prevSky
       if (timeChanged) {
         this.applyEnv()
